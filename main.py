@@ -1,5 +1,5 @@
-from server_part import Server
+from src.client_part_class import WorkServer, URLS
 
 if __name__ == '__main__':
-    server = Server('127.0.0.1', 7777, debug=True)
-    server.run_server()
+    client = WorkServer('127.0.0.1', 7777, debug=False)
+    client.run_server()
