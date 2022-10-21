@@ -5,9 +5,6 @@ from src.make_server import Server
 
 
 class UserSocket(Server):
-    def __init__(self, url, port):
-        super().__init__(url, port)
-
     __TO_MONITOR = []
 
     def _make_con(self, server_socket: socket.socket) -> None:
@@ -23,7 +20,9 @@ class UserSocket(Server):
             client_side.close()
 
     def send_request(self, request) -> None:
-        raise NotImplementedError
+        raise NotImplementedError(
+            'Необходимо переопределить этот метод в дочернем классе'
+        )
 
     def run_server(self) -> None:
         self.__TO_MONITOR.append(self.server)

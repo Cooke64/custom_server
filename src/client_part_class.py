@@ -11,8 +11,6 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 log.addHandler(logging.FileHandler('loger_data.log'))
 
-URLS = {}
-
 
 class Nums(enum.Enum):
     BAD_REQUEST = 404
@@ -20,9 +18,9 @@ class Nums(enum.Enum):
     STATUS_OK = 200
 
 
-class WorkServer(UserSocket):
+class BaseHandler(UserSocket):
     _rest = 'Content-Type: text/html; charset=utf-8\r\n\r\n'
-    _HEADER_OK = 'HTTPS/1.1 200 OK\r\n' + _rest
+    _HEADER_OK = 'HTTPS/1.1\r\n' + _rest
     _BAD_REQUEST = 'HTTPS/1.1 404 Bad request\r\n' + _rest
     _NOT_ALLOWED = 'HTTPS/1.1 405 Method is not allowed\r\n' + _rest
 
@@ -31,10 +29,15 @@ class WorkServer(UserSocket):
         405: '<h1>Method is not allowed </h1>',
     }
 
-    def __init__(self, url: str = 'localhost', port: int = 8000,
+    URLS = {}
+
+    def __init__(self, url: str = '127.0.0.1', port: int = 7777,
                  debug: bool = False):
         super().__init__(url, port)
         self.debug = debug
+
+    def __call__(self, *args, **kwargs):
+        return self.run_server()
 
     def _make_headers(self, method: bytes, url: bytes) -> Tuple[str, int]:
         """
@@ -45,7 +48,7 @@ class WorkServer(UserSocket):
         if not method == b'GET':
             log.info(f'The method {method} is prohibited')
             return self._NOT_ALLOWED, Nums.NOT_ALLOWED.value
-        if url not in URLS:
+        if url not in self.URLS:
             log.info(f'There`s no page with url {url}')
             return self._BAD_REQUEST, Nums.BAD_REQUEST.value
         return self._HEADER_OK, Nums.STATUS_OK.value
@@ -53,7 +56,7 @@ class WorkServer(UserSocket):
     def _get_view(self, code: int, url: str) -> Union[Any]:
         if code in [Nums.NOT_ALLOWED.value, Nums.BAD_REQUEST.value]:
             return self._ERROR[code]
-        return URLS[url][0]()
+        return self.URLS[url][0]()
 
     def _generate_response(self, request: bytes) -> bytes:
         """Генерирует ответ сервер. в виде ответа пользователю и headers"""
@@ -78,42 +81,25 @@ class WorkServer(UserSocket):
         )[self.debug]
 
 
-def check_decorator(url):
-    if not url.decode().startswith('/'):
-        raise UrlError('Ссылка должна начинаться с символа "/"')
-    elif url in URLS:
-        raise UrlError('Такой адрес уже есть')
+class Router(BaseHandler):
+    def check_decorator(self, url):
+        if not url.decode().startswith('/'):
+            raise UrlError('Ссылка должна начинаться с символа "/"')
+        elif url in self.URLS:
+            raise UrlError('Такой адрес уже есть')
 
+    def view_router(self, url, method=b'GET'):
+        def decorator(func):
+            try:
+                self.check_decorator(url)
+                self.URLS[url] = (func, method)
+            except:
+                raise
 
-def router(url, method=b'GET'):
-    def decorator(func):
-        try:
-            check_decorator(url)
-            URLS[url] = (func, method)
-        except:
-            raise
+            @functools.wraps(func)
+            def inner(*args, **kwargs):
+                return func(*args, **kwargs)
 
-        @functools.wraps(func)
-        def inner(*args, **kwargs):
-            return func(*args, **kwargs)
+            return inner
 
-        return inner
-
-    return decorator
-
-
-@router(url=b'/')
-def index():
-    some_data = {'first': '<a href=/blog>link</a>',
-                 'second': '<a href=/second>link</a>'}
-    return json.dumps(some_data)
-
-
-@router(url=b'/blog')
-def blog():
-    return '<h1>Hello, world and look at my code!</h1>'
-
-
-@router(url=b'/second')
-def blog():
-    return '<h1>It`s a second page</h1>'
+        return decorator
