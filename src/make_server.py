@@ -29,7 +29,7 @@ class Server:
     @staticmethod
     def validate_url(value: str) -> bool:
         """Проверяет соответствие переданного ip адреса установленным правилам написания ip"""
-        regex = r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+        regex = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
         match = fullmatch(regex, value)
         return match or value == 'localhost'
 
