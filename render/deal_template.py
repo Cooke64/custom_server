@@ -15,7 +15,7 @@ def render_to_template(template: str, content: dict,):
         raise TypeError('Файл должен быть формата html')
     template = environment.get_template(template)
     res = template.render(
-            **content,
+            content,
         )
     return res
 

@@ -5,6 +5,8 @@
   <title>Title</title>
 </head>
 <body>
-<h1>Hello, {{ name }}, {{ reaction }} to see you!</h1>
-</body>
-</html>
+{% filter upper %}
+<h1>Hello, {{ name }}, {{ reaction }} to see you!</h1><br>
+{% endfilter %}
+<h4>Total something is {{ res| random }}</h4>
+<h3>ahaha</h3>
