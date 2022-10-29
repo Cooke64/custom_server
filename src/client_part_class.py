@@ -105,8 +105,8 @@ class Router(BaseHandler):
 
             @functools.wraps(func)
             def inner(*args, **kwargs):
-                return func(*args, **kwargs)
+                data = func(*args, **kwargs)
+                return data
 
             return inner
-
         return decorator

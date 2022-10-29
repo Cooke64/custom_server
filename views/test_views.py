@@ -28,3 +28,10 @@ def blog():
 def second():
     data = '<h1>It`s  second page</h1>'
     return render_string(data)
+
+
+@router.view_router(url=b'/third')
+def third():
+    third.kwarg = 123
+    data = '<h1>It`s  second page</h1>'
+    return render_string(data)

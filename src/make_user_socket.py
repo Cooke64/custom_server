@@ -14,13 +14,13 @@ class UserSocket(Server):
     def _send_message(self, client_side) -> None:
         request = client_side.recv(4048)
         if request:
-            response = self.send_request(request)
+            response = self._send_request(request)
             client_side.send(response)
         else:
             client_side.close()
 
-    def send_request(self, request) -> NotImplementedError:
-        return NotImplementedError(
+    def _send_request(self, request) -> None:
+        raise NotImplementedError(
             'Необходимо переопределить этот метод в дочернем классе'
         )
 
