@@ -1,6 +1,5 @@
 import enum
 import functools
-import json
 import logging
 from typing import Tuple, Union, Any
 
@@ -45,18 +44,24 @@ class BaseHandler(UserSocket):
         :param url: принимает url, по которому обращается пользователь.
         :return: Возвращает заголовок и статус код ответа сервера.
         """
-        if not method == b'GET':
-            log.info(f'The method {method} is prohibited')
-            return self._NOT_ALLOWED, Nums.NOT_ALLOWED.value
         if url not in self.URLS:
             log.info(f'There`s no page with url {url}')
             return self._BAD_REQUEST, Nums.BAD_REQUEST.value
-        return self._HEADER_OK, Nums.STATUS_OK.value
+        match method:
+            case b'GET':
+                return self._HEADER_OK, Nums.STATUS_OK.value
+            case _:
+                log.info(f'The method {method} is prohibited')
+                return self._NOT_ALLOWED, Nums.NOT_ALLOWED.value
 
     def _get_view(self, code: int, url: str) -> Union[Any]:
-        if code in [Nums.NOT_ALLOWED.value, Nums.BAD_REQUEST.value]:
-            return self._ERROR[code]
-        return self.URLS[url][0]()
+        match code:
+            case Nums.NOT_ALLOWED.value | Nums.BAD_REQUEST.value:
+                return self._ERROR[code]
+            case 200:
+                return self.URLS[url][0]()
+            case _:
+                raise ValueError('Нет такого кода для обработки.')
 
     def _generate_response(self, request: bytes) -> bytes:
         """Генерирует ответ сервер. в виде ответа пользователю и headers"""
@@ -74,7 +79,7 @@ class BaseHandler(UserSocket):
         # создает заголовок, с соединенным ответом
         return (self._HEADER_OK + ''.join(url)).encode('utf-8')
 
-    def send_request(self, request) -> None:
+    def _send_request(self, request: bytes) -> None:
         return (
             self._generate_response(request),
             self._debug_response(request)
@@ -87,12 +92,14 @@ class Router(BaseHandler):
             raise UrlError('Ссылка должна начинаться с символа "/"')
         elif url in self.URLS:
             raise UrlError('Такой адрес уже есть')
+        return True
 
-    def view_router(self, url, method=b'GET'):
+    def view_router(self, url, method=b'GET', slug: bool = False):
         def decorator(func):
+
             try:
-                self.check_decorator(url)
-                self.URLS[url] = (func, method)
+                if self.check_decorator(url):
+                    self.URLS[url] = (func, method)
             except:
                 raise
 

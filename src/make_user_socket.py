@@ -19,8 +19,8 @@ class UserSocket(Server):
         else:
             client_side.close()
 
-    def send_request(self, request) -> None:
-        raise NotImplementedError(
+    def send_request(self, request) -> NotImplementedError:
+        return NotImplementedError(
             'Необходимо переопределить этот метод в дочернем классе'
         )
 

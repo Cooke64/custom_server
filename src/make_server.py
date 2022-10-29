@@ -17,11 +17,11 @@ class Server:
             self.__socket = (url, port)
             self.server = self.__make_server()
 
-    def __check_params(self, url: str, port: int) -> bool:
+    def __check_params(self, url: str, port: int) -> bool | None:
         if not self.validate_url(url):
             raise IpAndPortError('Неправильно задан url')
         check_value = Value.MIN_PORT.value < port <= Value.MAX_PORT.value
-        if not isinstance(port, int) or not check_value:
+        if not isinstance(port, int) | check_value:
             raise IpAndPortError('Неправильно задан port')
         else:
             return True
