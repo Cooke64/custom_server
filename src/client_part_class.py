@@ -1,10 +1,12 @@
 import enum
 import functools
 import logging
+from re import fullmatch, search
 from typing import Tuple, Union, Any
 
 from custom_exception import UrlError
 from src.make_user_socket import UserSocket
+from src.response_data import Response
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -29,6 +31,7 @@ class BaseHandler(UserSocket):
     }
 
     URLS = {}
+    SLUG_URLS = {}
 
     def __init__(self, url: str = '127.0.0.1', port: int = 7777,
                  debug: bool = False):
@@ -38,13 +41,18 @@ class BaseHandler(UserSocket):
     def __call__(self, *args, **kwargs):
         return self.run_server()
 
+    def _get_slug(self, url: bytes):
+        _, *slug_data, _ = url.split(b'/')
+        return tuple(slug_data)
+
     def _make_headers(self, method: bytes, url: bytes) -> Tuple[str, int]:
         """
         :param method: принимает вид метода, с которым пользователь сделал запрос.
         :param url: принимает url, по которому обращается пользователь.
         :return: Возвращает заголовок и статус код ответа сервера.
         """
-        if url not in self.URLS:
+        bool_value = url not in self.URLS and self._get_slug(url) not in self.SLUG_URLS
+        if bool_value:
             log.info(f'There`s no page with url {url}')
             return self._BAD_REQUEST, Nums.BAD_REQUEST.value
         match method:
@@ -54,20 +62,35 @@ class BaseHandler(UserSocket):
                 log.info(f'The method {method} is prohibited')
                 return self._NOT_ALLOWED, Nums.NOT_ALLOWED.value
 
-    def _get_view(self, code: int, url: str) -> Union[Any]:
+    def _get_view(self, code: int, url: bytes, response: bytes) -> Union[Any]:
+        """
+        Функция обработчик отображения ответа пользователю
+        при запросе на определенный адрес.
+        :param code: код ответа сервера.
+        :param url: адрес, по которому был сделан запрос.
+        :param response: передается ответ сервера, представленный в байтах.
+        :return: вызов функции, в зависимости от переданного url и кода ответа.
+        """
         match code:
+            case Nums.STATUS_OK.value:
+                # Вызов функции из словаря, где ключ это адрес страницы, а значение
+                # это вью функция отображения. Передается объект класса Response
+                try:
+                    return self.URLS[url][0](Response(response))
+                except KeyError:
+                    return self.SLUG_URLS[self._get_slug(url)][0](Response(response))
             case Nums.NOT_ALLOWED.value | Nums.BAD_REQUEST.value:
                 return self._ERROR[code]
-            case 200:
-                return self.URLS[url][0]()
             case _:
                 raise ValueError('Нет такого кода для обработки.')
 
-    def _generate_response(self, request: bytes) -> bytes:
+    def _generate_response(self, response: bytes) -> bytes:
         """Генерирует ответ сервер. в виде ответа пользователю и headers"""
-        method, url, *_ = request.split()
+        method, url, *_ = response.split()
         headers, code = self._make_headers(method, url)
-        view = self._get_view(code, url)
+        view = self._get_view(code, url, response=response)
+        if isinstance(view, tuple):
+            return (headers + view[0]).encode('utf-8')
         return (headers + view).encode('utf-8')
 
     def _debug_response(self, request: bytes):
@@ -94,13 +117,24 @@ class Router(BaseHandler):
             raise UrlError('Такой адрес уже есть')
         return True
 
-    def view_router(self, url, method=b'GET', slug: bool = False):
-        def decorator(func):
+    def get_slug(self, url: bytes) -> str | None:
+        # Сделать декомпозицию этой функции, поймать исключения, моменты, гдн может упасть
+        regex = r'.+/<.+>'
+        regex_slug = r'<.+>'
+        url = url.decode()
+        if fullmatch(regex, url):
+            return search(regex_slug, url).group().replace('<', '').replace('>', '')
 
+    def view_router(self, url, method=b'GET'):
+        def decorator(func):
             try:
                 if self.check_decorator(url):
+                    slug = self.get_slug(url)
+                    if slug:
+                        link = url.split(b'/')[1]
+                        self.SLUG_URLS[(link, slug.encode('utf-8'))] = (func, method)
                     self.URLS[url] = (func, method)
-            except:
+            except UrlError:
                 raise
 
             @functools.wraps(func)
@@ -109,4 +143,5 @@ class Router(BaseHandler):
                 return data
 
             return inner
+
         return decorator
