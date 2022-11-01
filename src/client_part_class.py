@@ -32,6 +32,7 @@ class BaseHandler(UserSocket):
 
     URLS = {}
     SLUG_URLS = {}
+    HEADERS = Tuple[str, int]
 
     def __init__(self, url: str = '127.0.0.1', port: int = 7777,
                  debug: bool = False):
@@ -41,18 +42,21 @@ class BaseHandler(UserSocket):
     def __call__(self, *args, **kwargs):
         return self.run_server()
 
-    def _get_slug(self, url: bytes):
+    def _get_slug(self, url: bytes) -> HEADERS:
         _, *slug_data, _ = url.split(b'/')
         return tuple(slug_data)
 
-    def _make_headers(self, method: bytes, url: bytes) -> Tuple[str, int]:
+    def is_not_url_in_dict(self, url: bytes) -> bool:
+        return url not in self.URLS and self._get_slug(
+            url) not in self.SLUG_URLS
+
+    def _make_headers(self, method: bytes, url: bytes) -> HEADERS:
         """
         :param method: принимает вид метода, с которым пользователь сделал запрос.
         :param url: принимает url, по которому обращается пользователь.
         :return: Возвращает заголовок и статус код ответа сервера.
         """
-        bool_value = url not in self.URLS and self._get_slug(url) not in self.SLUG_URLS
-        if bool_value:
+        if self.is_not_url_in_dict(url):
             log.info(f'There`s no page with url {url}')
             return self._BAD_REQUEST, Nums.BAD_REQUEST.value
         match method:
@@ -62,7 +66,7 @@ class BaseHandler(UserSocket):
                 log.info(f'The method {method} is prohibited')
                 return self._NOT_ALLOWED, Nums.NOT_ALLOWED.value
 
-    def _get_view(self, code: int, url: bytes, response: bytes) -> Union[Any]:
+    def get_view(self, code: int, url: bytes, response: bytes) -> Union[Any]:
         """
         Функция обработчик отображения ответа пользователю
         при запросе на определенный адрес.
@@ -76,36 +80,39 @@ class BaseHandler(UserSocket):
                 # Вызов функции из словаря, где ключ это адрес страницы, а значение
                 # это вью функция отображения. Передается объект класса Response
                 try:
-                    return self.URLS[url][0](Response(response))
+                    res_func = self.URLS[url][0]
+                    return res_func(Response(response))
                 except KeyError:
-                    return self.SLUG_URLS[self._get_slug(url)][0](Response(response))
+                    res_func = self.SLUG_URLS[self._get_slug(url)][0]
+                    return res_func(Response(response))
             case Nums.NOT_ALLOWED.value | Nums.BAD_REQUEST.value:
                 return self._ERROR[code]
             case _:
+                log.info(f'Неправильный код обработки {code}')
                 raise ValueError('Нет такого кода для обработки.')
 
     def _generate_response(self, response: bytes) -> bytes:
         """Генерирует ответ сервер. в виде ответа пользователю и headers"""
         method, url, *_ = response.split()
         headers, code = self._make_headers(method, url)
-        view = self._get_view(code, url, response=response)
+        view = self.get_view(code, url, response=response)
         if isinstance(view, tuple):
             return (headers + view[0]).encode('utf-8')
         return (headers + view).encode('utf-8')
 
-    def _debug_response(self, request: bytes):
+    def _debug_response(self, response: bytes):
         """При включенном атрибуте debug возвращает параметры запроса"""
         # генератор создает ответ, который разделяется между собой переносом строки
         url = (
-            str(i) + '<br>' for i in request.split(b'\r\n') if i
+            str(i) + '<br>' for i in response.split(b'\r\n') if i
         )
         # создает заголовок, с соединенным ответом
         return (self._HEADER_OK + ''.join(url)).encode('utf-8')
 
-    def _send_request(self, request: bytes) -> None:
+    def _send_response(self, response: bytes) -> None:
         return (
-            self._generate_response(request),
-            self._debug_response(request)
+            self._generate_response(response),
+            self._debug_response(response)
         )[self.debug]
 
 

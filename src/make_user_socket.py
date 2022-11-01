@@ -11,15 +11,16 @@ class UserSocket(Server):
         client_side, _ = server_socket.accept()
         self.__TO_MONITOR.append(client_side)
 
-    def _send_message(self, client_side) -> None:
-        request = client_side.recv(4048)
-        if request:
-            response = self._send_request(request)
+    def _send_message(self, client_side: socket.socket) -> None:
+        response = client_side.recv(4048)
+
+        if response:
+            response = self._send_response(response)
             client_side.send(response)
         else:
             client_side.close()
 
-    def _send_request(self, request) -> None:
+    def _send_response(self, response) -> None:
         raise NotImplementedError(
             'Необходимо переопределить этот метод в дочернем классе'
         )

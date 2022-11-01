@@ -12,6 +12,13 @@ class Value(enum.Enum):
 
 
 class Server:
+    __instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not Server.__instance:
+            Server.__instance = super(Server, cls).__new__(cls, *args, **kwargs)
+        return Server.__instance
+
     def __init__(self, url: str, port: int):
         if self.__check_params(url, port):
             self.__socket = (url, port)
@@ -38,5 +45,3 @@ class Server:
         server_socket.bind(self.__socket)
         server_socket.listen(Value.LISTEN_NUMS.value)
         return server_socket
-
-
