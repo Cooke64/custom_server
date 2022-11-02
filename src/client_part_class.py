@@ -7,10 +7,13 @@ from typing import Tuple, Union, Any
 from custom_exception import UrlError
 from src.make_user_socket import UserSocket
 from src.response_data import Response
+from src.services import get_slug
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 log.addHandler(logging.FileHandler('loger_data.log'))
+
+HEADERS = Tuple[str, Any]
 
 
 class Nums(enum.Enum):
@@ -32,7 +35,6 @@ class BaseHandler(UserSocket):
 
     URLS = {}
     SLUG_URLS = {}
-    HEADERS = Tuple[str, int]
 
     def __init__(self, url: str = '127.0.0.1', port: int = 7777,
                  debug: bool = False):
@@ -42,13 +44,11 @@ class BaseHandler(UserSocket):
     def __call__(self, *args, **kwargs):
         return self.run_server()
 
-    def _get_slug(self, url: bytes) -> HEADERS:
-        _, *slug_data, _ = url.split(b'/')
-        return tuple(slug_data)
+    def __repr__(self):
+        return f'Соединение установлено, всего {len(self.URLS)} urls.'
 
     def is_not_url_in_dict(self, url: bytes) -> bool:
-        return url not in self.URLS and self._get_slug(
-            url) not in self.SLUG_URLS
+        return url not in self.URLS and get_slug(url) not in self.SLUG_URLS
 
     def _make_headers(self, method: bytes, url: bytes) -> HEADERS:
         """
@@ -83,7 +83,7 @@ class BaseHandler(UserSocket):
                     res_func = self.URLS[url][0]
                     return res_func(Response(response))
                 except KeyError:
-                    res_func = self.SLUG_URLS[self._get_slug(url)][0]
+                    res_func = self.SLUG_URLS[get_slug(url)][0]
                     return res_func(Response(response))
             case Nums.NOT_ALLOWED.value | Nums.BAD_REQUEST.value:
                 return self._ERROR[code]
@@ -124,22 +124,24 @@ class Router(BaseHandler):
             raise UrlError('Такой адрес уже есть')
         return True
 
-    def get_slug(self, url: bytes) -> str | None:
+    def find_slug(self, url: bytes) -> str | None:
         # Сделать декомпозицию этой функции, поймать исключения, моменты, гдн может упасть
         regex = r'.+/<.+>'
         regex_slug = r'<.+>'
         url = url.decode()
         if fullmatch(regex, url):
-            return search(regex_slug, url).group().replace('<', '').replace('>', '')
+            return search(regex_slug, url).group().replace('<', '').replace(
+                '>', '')
 
     def view_router(self, url, method=b'GET'):
         def decorator(func):
             try:
                 if self.check_decorator(url):
-                    slug = self.get_slug(url)
+                    slug = self.find_slug(url)
                     if slug:
                         link = url.split(b'/')[1]
-                        self.SLUG_URLS[(link, slug.encode('utf-8'))] = (func, method)
+                        self.SLUG_URLS[(link, slug.encode('utf-8'))] = (
+                            func, method)
                     self.URLS[url] = (func, method)
             except UrlError:
                 raise

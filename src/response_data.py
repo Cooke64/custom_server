@@ -1,3 +1,4 @@
+from src.services import get_slug
 
 
 class Response:
@@ -14,7 +15,9 @@ class Response:
 
     def get_pk(self):
         try:
-            return self._data[1]
+            url = self._data[1]
+            res = get_slug(url)
+            return res.slug
         except IndexError as e:
             raise e
 
