@@ -1,3 +1,6 @@
+import pytest
+
+from custom_exception import IpAndPortError
 from messages.test_mes import Messages
 from src.client_part_class import Nums, get_slug, BaseHandler
 from src.services import validate_url, check_params
@@ -29,10 +32,19 @@ def test_make_headers_post(make_server: BaseHandler):
     assert data == (make_server._NOT_ALLOWED, Nums.NOT_ALLOWED.value)
 
 
-def test_get_view(make_server: BaseHandler):
-    assert make_server.get_view(404, url, response) == '<h1>Not found </h1>'
-    assert make_server.get_view(200, url, response) == 1
+@pytest.mark.parametrize('code, resp', [
+    (404, '<h1>Not found </h1>'),
+    (405, '<h1>Method is not allowed </h1>'),
+    (200, 1)
+
+])
+def test_get_view(code, resp, make_server: BaseHandler):
+
+    assert make_server.get_view(code, url, response) == resp
+
     assert len(make_server.URLS) == 1
+    with pytest.raises(ValueError):
+        make_server.get_view(1, url, response)
 
 
 def test_validate_url():
@@ -41,5 +53,9 @@ def test_validate_url():
     assert validate_url(correct_host) is True
 
 
+@pytest.mark.skip('Доделать тест')
 def test_check_params():
     assert check_params(correct_host, 400) is True
+    with pytest.raises(IpAndPortError):
+        check_params(correct_host, 9999)
+        check_params(wrong_host, 200)
